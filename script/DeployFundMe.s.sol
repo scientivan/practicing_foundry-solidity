@@ -5,16 +5,24 @@ import {FundMe} from "../src/FundMe.sol";
 import {Script} from "forge-std/Script.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
 
+//  Contract untuk ngedeploy FundMe
 contract DeployFundMe is Script {
-    //     Counter public counter;
-    // harusnya tambahin constructor?
-    function setUp() public {}
-    function run() external returns (FundMe) {
+    function deployFundMe() public returns (FundMe, HelperConfig) {
+        // Untuk tau network mana yang aktif
         HelperConfig helperConfig = new HelperConfig();
-        address ethUsdPriceConfig = helperConfig.activeNetworkConfig();
+
+        address priceFeed = helperConfig
+            .getConfigByChainId(block.chainid)
+            .priceFeed;
+
         vm.startBroadcast();
-        FundMe fundMe = new FundMe(ethUsdPriceConfig);
+        FundMe fundMe = new FundMe(priceFeed);
         vm.stopBroadcast();
-        return fundMe;
+        // mengembalikan address dari contract yang udah dideploy
+        return (fundMe, helperConfig);
+    }
+    // mengembalikan address dari contract yang udah dideploy
+    function run() external returns (FundMe, HelperConfig) {
+        return deployFundMe();
     }
 }

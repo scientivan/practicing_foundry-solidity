@@ -9,11 +9,17 @@ error FundMe__NotOwner();
 contract FundMe {
     using PriceConverter for uint256;
     uint256 public constant MINIMUM_USD = 5e18;
+    // addressnya para funder
+    address[] private s_funders;
+    // address yang deploy contract fundMe ini
+    address private immutable i_owner;
+    // mengakses harga dari ETH ke USD menggunakan
+    // interface library AggregatorV3Interface
+    // s_priceFeed berbentuk aggregatorv3interface
+    AggregatorV3Interface private s_priceFeed;
+
     mapping(address funderAddress => uint256 amountFunded)
         private s_addressToAmountFunded;
-    address[] private s_funders;
-    address public immutable i_owner;
-    AggregatorV3Interface private s_priceFeed;
 
     constructor(address priceFeed) {
         i_owner = msg.sender;
@@ -30,27 +36,22 @@ contract FundMe {
         s_funders.push(msg.sender);
     }
 
-    function getVersion() public view returns (uint256) {
-        return s_priceFeed.version();
-    }
-
     // ngewithdraw semua dana yang telah diberikan oleh sender ke owner dan diberikan modifier onlyOwner agar keamanannya terjaga
     function withdraw() public onlyOwner {
+        address[] memory funders = s_funders;
         for (
             uint256 funderIndex = 0;
-            funderIndex < s_funders.length;
+            funderIndex < funders.length;
             funderIndex++
         ) {
-            address funder = s_funders[funderIndex];
+            address funder = funders[funderIndex];
             s_addressToAmountFunded[funder] = 0; //di reset jadi 0
         }
         // reset array funders dengan panjangnya menjadi 0
         s_funders = new address[](0);
         // .call ngereturn boolean yang untuk send errornya harus menggunakan revert melalui keyword require
-        (bool callSuccess, ) = payable(msg.sender).call{
-            value: address(this).balance
-        }("");
-        require(callSuccess, "Call failed");
+        (bool callSuccess, ) = i_owner.call{value: address(this).balance}("");
+        require(callSuccess);
     }
 
     receive() external payable {
@@ -64,14 +65,26 @@ contract FundMe {
         View / Pure functions (Getters)
     */
 
+    function getVersion() public view returns (uint256) {
+        return s_priceFeed.version();
+    }
+
     function getAddressToAmountFunded(
         address funderAddress
     ) external view returns (uint256) {
         return s_addressToAmountFunded[funderAddress];
     }
 
-    function getFundersAddress(uint256 index) external view returns (address) {
+    function getFunderAddress(uint256 index) external view returns (address) {
         return s_funders[index];
+    }
+
+    function getOwnerAddress() external view returns (address) {
+        return i_owner;
+    }
+
+    function getPriceFeed() public view returns (AggregatorV3Interface) {
+        return s_priceFeed;
     }
 
     modifier onlyOwner() {

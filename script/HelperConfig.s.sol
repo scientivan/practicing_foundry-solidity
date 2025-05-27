@@ -1,42 +1,92 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
-
 import {MockV3Aggregator} from "../test/mocks/MockV3Aggregator.sol";
-import {Script} from "forge-std/Script.sol";
+import {Script, console2, console} from "forge-std/Script.sol";
 
-contract HelperConfig is Script {
+abstract contract CodeConstants {
     uint8 public constant ETH_DECIMALS = 8;
     int256 public constant INITIAL_PRICE = 2000e8;
+
+    /*//////////////////////////////////////////////////////////////
+                               CHAIN IDS
+    //////////////////////////////////////////////////////////////*/
+    uint256 public constant ETH_SEPOLIA_CHAIN_ID = 11155111;
+    uint256 public constant ZKSYNC_SEPOLIA_CHAIN_ID = 300;
+    uint256 public constant LOCAL_CHAIN_ID = 31337;
+}
+
+contract HelperConfig is CodeConstants, Script {
+    /*//////////////////////////////////////////////////////////////
+                                 ERRORS
+    //////////////////////////////////////////////////////////////*/
+    error HelperConfig__InvalidChainId();
+
+    /*//////////////////////////////////////////////////////////////
+                                 TYPES
+    //////////////////////////////////////////////////////////////*/
     struct NetworkConfig {
         address priceFeed;
     }
 
-    mapping(uint256 => NetworkConfig) internal networkConfigs;
+    /*//////////////////////////////////////////////////////////////
+                            STATE VARIABLES
+    //////////////////////////////////////////////////////////////*/
+    // Local network state variables
+    NetworkConfig public localNetworkConfig;
+    mapping(uint256 chainId => NetworkConfig) public networkConfigs;
 
-    NetworkConfig public activeNetworkConfig;
-
+    /*//////////////////////////////////////////////////////////////
+                               FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
     constructor() {
-        // Inisialisasi semua network yang kamu dukung
-        // anvil local blockchain
-        if (block.chainid == 31337) {
-            activeNetworkConfig = getAnvilEthConfig();
+        networkConfigs[ETH_SEPOLIA_CHAIN_ID] = getSepoliaEthConfig();
+        networkConfigs[ZKSYNC_SEPOLIA_CHAIN_ID] = getZkSyncSepoliaConfig();
+        // Note: We skip doing the local config
+    }
+
+    function getConfigByChainId(
+        uint256 chainId
+    ) public returns (NetworkConfig memory) {
+        if (networkConfigs[chainId].priceFeed != address(0)) {
+            return networkConfigs[chainId];
+        } else if (chainId == LOCAL_CHAIN_ID) {
+            return getOrCreateAnvilEthConfig();
         } else {
-            networkConfigs[11155111] = NetworkConfig({
-                priceFeed: 0x694AA1769357215DE4FAC081bf1f309aDC325306 // sepolia
-            });
-
-            networkConfigs[1] = NetworkConfig({
-                priceFeed: 0x5147eA642CAEF7BD9c1265AadcA78f997AbB9649 // mainnet eth
-            });
-
-            activeNetworkConfig = networkConfigs[block.chainid];
+            revert HelperConfig__InvalidChainId();
         }
     }
 
-    function getAnvilEthConfig() public returns (NetworkConfig memory) {
-        if (activeNetworkConfig.priceFeed != address(0)) {
-            return activeNetworkConfig;
+    /*//////////////////////////////////////////////////////////////
+                                CONFIGS
+    //////////////////////////////////////////////////////////////*/
+    function getSepoliaEthConfig() public pure returns (NetworkConfig memory) {
+        return
+            NetworkConfig({
+                priceFeed: 0x694AA1769357215DE4FAC081bf1f309aDC325306 // ETH / USD
+            });
+    }
+
+    function getZkSyncSepoliaConfig()
+        public
+        pure
+        returns (NetworkConfig memory)
+    {
+        return
+            NetworkConfig({
+                priceFeed: 0xfEefF7c3fB57d18C5C6Cdd71e45D2D0b4F9377bF // ETH / USD
+            });
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                              LOCAL CONFIG
+    //////////////////////////////////////////////////////////////*/
+    function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
+        // Check to see if we set an active network config
+        console.log("test");
+        if (localNetworkConfig.priceFeed != address(0)) {
+            return localNetworkConfig;
         }
+
+        console2.log(unicode"⚠️ You have deployed a mock contract!");
+        console2.log("Make sure this was intentional");
         vm.startBroadcast();
         MockV3Aggregator mockPriceFeed = new MockV3Aggregator(
             ETH_DECIMALS,
@@ -44,47 +94,7 @@ contract HelperConfig is Script {
         );
         vm.stopBroadcast();
 
-        NetworkConfig memory anvilConfig = NetworkConfig({
-            priceFeed: address(mockPriceFeed) // placeholder atau mock nanti kamu deploy sendiri
-            // kita harus bikin mock dlu (fake account with fake balance)
-            // ngereturn address dari mock tersebut
-        });
-        return anvilConfig;
+        localNetworkConfig = NetworkConfig({priceFeed: address(mockPriceFeed)});
+        return localNetworkConfig;
     }
 }
-
-// pragma solidity ^0.8.13;
-
-// import {FundMe} from "../src/FundMe.sol";
-// import {DeployFundMe} from "../script/DeployFundMe.s.sol";
-
-// contract HelperConfig {
-//     NetworkConfig public activeNetworkConfig;
-
-//     struct NetworkConfig {
-//         address priceFeed;
-//     }
-
-//     constructor() {
-//         // kalok chainidnya adalah chain id nya sepoliaeth, maka return pricefeednya sepoliaeth
-//         if (block.chainid == 11155111) {
-//             activeNetworkConfig = getSepoliaEthConfig();
-//         }
-//         // kalok chainidnya bukan chain id nyasepoliaeth, maka return pricefeednya anvil
-//         else {
-//             activeNetworkConfig = getAnvilEthConfig();
-//         }
-//     }
-//     // jaringan testnet sepolia (punya chainlink, jadi bisa langsung ambil priceFeed yang udah ada dan ga harus buat mock)
-//     function getSepoliaEthConfig() public pure returns (NetworkConfig memory) {
-//         NetworkConfig memory sepoliaConfig = NetworkConfig({
-//             priceFeed: 0x694AA1769357215DE4FAC081bf1f309aDC325306
-//         });
-//         return sepoliaConfig;
-//     }
-
-//     // jaringan local testnet anvil (Karena Anvil tidak punya Chainlink, kamu perlu deploy price feed mock sendiri, misalnya MockV3Aggregator.)
-//     function getAnvilEthConfig() public pure returns (NetworkConfig memory) {
-//         // price feed address
-//     }
-// }
