@@ -45,6 +45,8 @@ contract HelperConfig is CodeConstants, Script {
     function getConfigByChainId(
         uint256 chainId
     ) public returns (NetworkConfig memory) {
+        // Mengecek apakah alamat priceFeed bukan alamat nol
+        // yang merupakan default value untuk address di solidity
         if (networkConfigs[chainId].priceFeed != address(0)) {
             return networkConfigs[chainId];
         } else if (chainId == LOCAL_CHAIN_ID) {

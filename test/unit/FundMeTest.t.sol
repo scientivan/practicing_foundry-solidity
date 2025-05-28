@@ -22,10 +22,6 @@ contract FundMeTest is Test, CodeConstants {
     function setUp() external {
         // testing in local blockchain with anvil
         // nge deploy contract deployFundMe yang mendeploy fundMe untuk dilakukkan testing
-        MockV3Aggregator mockPriceFeed = new MockV3Aggregator(
-            ETH_DECIMALS, // 8 decimal places
-            INITIAL_PRICE // 2000 USD in 8 decimal places
-        );
         DeployFundMe deployer = new DeployFundMe();
         (fundMe, helperConfig) = deployer.deployFundMe();
         vm.deal(USER, STARTING_USER_BALANCE);
@@ -50,6 +46,7 @@ contract FundMeTest is Test, CodeConstants {
     }
 
     function testFundFailsWithoutEnoughETH() public {
+        // code atau logic apapun yang ada dibawah ini akan true apabila semuanya false
         vm.expectRevert();
         fundMe.fund();
     }
@@ -122,6 +119,5 @@ contract FundMeTest is Test, CodeConstants {
     function testGetVersion() public {
         uint256 version = fundMe.getVersion();
         console.log(version);
-        // assertEq(version, 4);
     }
 }

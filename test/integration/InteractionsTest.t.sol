@@ -9,3 +9,13 @@ import {HelperConfig} from "../../script/HelperConfig.s.sol";
 import {Test, console} from "forge-std/Test.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 // import {ZkSyncChainChecker} from "lib/foundry-devops/src/ZkSyncChainChecker.sol";
+
+contract InteractionTest is Test, StdCheats {
+    uint256 public constant SEND_VALUE = 0.1 ether;
+    
+    function setUp() external {
+        DeployFundMe deployer = new DeployFundMe();
+        (fundMe, helperConfig) = deployer.deployFundMe();
+    }
+    vm.deal(USER,STARTING_USER_BALANCE)
+}
