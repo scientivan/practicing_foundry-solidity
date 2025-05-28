@@ -2,9 +2,10 @@
 pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
-import {FundMe} from "../src/FundMe.sol";
+import {DeployFundMe} from "../script/DeployFundMe.s.sol";
 import {HelperConfig, CodeConstants} from "../script/HelperConfig.s.sol";
 import {MockV3Aggregator} from "../test/mocks/MockV3Aggregator.sol";
+import {FundMe} from "../src/FundMe.sol";
 
 contract FundMeTest is Test, CodeConstants {
     FundMe public fundMe;
@@ -16,6 +17,7 @@ contract FundMeTest is Test, CodeConstants {
     uint256 constant MINIMUM_USD = 5e18;
     uint256 public constant SEND_VALUE = 0.1 ether; // just a value to make sure we are sending enough!
     uint256 public constant STARTING_USER_BALANCE = 10 ether;
+    uint256 public constant GAS_PRICE = 1;
 
     function setUp() external {
         // testing in local blockchain with anvil
@@ -24,7 +26,8 @@ contract FundMeTest is Test, CodeConstants {
             ETH_DECIMALS, // 8 decimal places
             INITIAL_PRICE // 2000 USD in 8 decimal places
         );
-        fundMe = new FundMe(address(mockPriceFeed));
+        DeployFundMe deployer = new DeployFundMe();
+        (fundMe, helperConfig) = deployer.deployFundMe();
         vm.deal(USER, STARTING_USER_BALANCE);
     }
 
@@ -33,13 +36,12 @@ contract FundMeTest is Test, CodeConstants {
     }
 
     function testOwnerIsMsgSender() public view {
-        assertEq(fundMe.getOwnerAddress(), address(this));
+        assertEq(fundMe.getOwnerAddress(), msg.sender);
     }
 
     function testPriceFeedSetCorrectly() public {
         address retrievedPriceFeed = address(fundMe.getPriceFeed());
         console.log(retrievedPriceFeed);
-        console.log(block.chainid);
         address expectedPriceFeed = helperConfig
             .getConfigByChainId(block.chainid)
             .priceFeed;
@@ -63,23 +65,46 @@ contract FundMeTest is Test, CodeConstants {
         fundMe.withdraw();
     }
 
-    // function testWithdrawFromASingleSender() public funded {
-    //     uint256 startingFundMeBalance = address(fundMe).balance;
-    //     console.log(startingFundMeBalance);
-    //     uint256 startingOwnerBalance = fundMe.getOwnerAddress().balance;
+    function testWithdrawFromASingleSender() public funded {
+        uint256 startingFundMeBalance = address(fundMe).balance;
+        uint256 startingOwnerBalance = fundMe.getOwnerAddress().balance;
 
-    //     vm.startPrank(fundMe.getOwnerAddress());
-    //     fundMe.withdraw();
-    //     vm.stopPrank();
+        vm.startPrank(fundMe.getOwnerAddress());
+        fundMe.withdraw();
+        vm.stopPrank();
 
-    //     uint256 endingFundMeBalance = address(fundMe).balance;
-    //     uint256 endingOwnerBalance = fundMe.getOwnerAddress().balance;
-    //     uint256 expectedOwnerBalance = startingOwnerBalance +
-    //         startingFundMeBalance;
+        uint256 endingFundMeBalance = address(fundMe).balance;
+        uint256 endingOwnerBalance = fundMe.getOwnerAddress().balance;
+        uint256 expectedOwnerBalance = startingOwnerBalance +
+            startingFundMeBalance;
 
-    //     assertEq(endingFundMeBalance, 0);
-    //     assertEq(endingOwnerBalance, expectedOwnerBalance);
-    // }
+        assertEq(endingFundMeBalance, 0);
+        assertEq(endingOwnerBalance, expectedOwnerBalance);
+    }
+
+    function testWithdrawFromMultipleSender() public funded {
+        uint256 numberOfFunders = 10;
+        uint160 startingUserIndex = 2 + USER_NUMBER;
+
+        uint256 startingFundMeBalance = address(fundMe).balance;
+        uint256 startingOwnerBalance = fundMe.getOwnerAddress().balance;
+
+        for (uint160 i = startingUserIndex; i < numberOfFunders; i++) {
+            hoax(address(i), STARTING_USER_BALANCE);
+            fundMe.fund{value: SEND_VALUE}();
+        }
+        uint256 afterFundedFundMeBalance = address(fundMe).balance;
+        assert(address(fundMe).balance > 0);
+
+        vm.startPrank(fundMe.getOwnerAddress());
+        fundMe.withdraw();
+        vm.stopPrank();
+
+        assert(address(fundMe).balance == 0);
+        uint256 endingOwnerBalance = startingOwnerBalance +
+            afterFundedFundMeBalance;
+        assert(endingOwnerBalance == fundMe.getOwnerAddress().balance);
+    }
 
     function testAddsSenderToArrayOfFunder() public funded {
         address funder = fundMe.getFunderAddress(0);
@@ -95,7 +120,6 @@ contract FundMeTest is Test, CodeConstants {
     }
 
     function testGetVersion() public {
-        console.log("test");
         uint256 version = fundMe.getVersion();
         console.log(version);
         // assertEq(version, 4);
